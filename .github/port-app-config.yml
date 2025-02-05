@@ -1,0 +1,84 @@
+resources:
+  - kind: folder
+    selector:
+      query: "true"
+      folders:
+        - path: src/* # Relative path to the folders containing your microservices
+          repos:
+            - microservices-demo # Replace with your actual repository name
+    port:
+      entity:
+        mappings:
+          identifier: ".folder.name"
+          title: ".folder.name"
+          blueprint: '"service"'
+          properties:
+            url: .repo.html_url + "/tree/" + .repo.default_branch  + "/" + .folder.path
+            readme: file://README.md
+  - kind: branch
+    selector:
+      query: 'true'
+    port:
+      entity:
+        mappings:
+          identifier: .repository.name + "_" + .branch.name
+          title: .repository.name + " " + .branch.name
+          blueprint: '"branch"'
+          properties:
+            is_protected: .branch.protected
+            commit_sha: .branch.commit.sha
+            commit_url: .branch.commit.url
+          relations:
+            repository: .repository.name
+  - kind: issue
+    selector:
+      query: ".pull_request == null" # JQ boolean query. If evaluated to false - skip syncing the object.
+    port:
+      entity:
+        mappings:
+          identifier: ".repo + (.id|tostring)"
+          title: ".title"
+          blueprint: '"githubIssue"'
+          properties:
+            creator: ".user.login"
+            assignees: "[.assignees[].login]"
+            labels: "[.labels[].name]"
+            status: ".state"
+            createdAt: ".created_at"
+            closedAt: ".closed_at"
+            updatedAt: ".updated_at"
+            description: ".body"
+            issueNumber: ".number"
+            link: ".html_url"
+          relations:
+            service: ".repo"
+  - kind: pull-request
+    selector:
+      query: "true" # JQ boolean query. If evaluated to false - skip syncing the object.
+    port:
+      entity:
+        mappings:
+          identifier: ".head.repo.name + (.id|tostring)" # The Entity identifier will be the repository name + the pull request ID.
+          title: ".title"
+          blueprint: '"githubPullRequest"'
+          properties:
+            creator: ".user.login"
+            assignees: "[.assignees[].login]"
+            reviewers: "[.requested_reviewers[].login]"
+            status: ".status" # merged, closed, opened
+            closedAt: ".closed_at"
+            updatedAt: ".updated_at"
+            mergedAt: ".merged_at"
+            createdAt: ".created_at"
+            prNumber: ".id"
+            link: ".html_url"
+            leadTimeHours: >-
+                (.created_at as $createdAt | .merged_at as $mergedAt |
+                ($createdAt | sub("\\..*Z$"; "Z") | strptime("%Y-%m-%dT%H:%M:%SZ") | mktime) as $createdTimestamp |
+                ($mergedAt | if . == null then null else sub("\\..*Z$"; "Z") |
+                strptime("%Y-%m-%dT%H:%M:%SZ") | mktime end) as $mergedTimestamp |
+                if $mergedTimestamp == null then null else
+                (((($mergedTimestamp - $createdTimestamp) / 3600) * 100 | floor) / 100) end)
+
+          relations:
+            service: .head.repo.name
