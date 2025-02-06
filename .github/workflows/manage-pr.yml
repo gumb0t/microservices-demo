@@ -1,0 +1,105 @@
+name: Manage Pull Request
+
+on:
+  workflow_dispatch:
+    inputs:
+      action: 
+        required: true
+        type: string
+      port_context:
+        required: true
+        description: "Details about the action and general context (blueprint, run id, etc...)"
+        type: string
+
+jobs:
+  manage-pr:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Inform starting of deletion
+        uses: port-labs/port-github-action@v1
+        with:
+          clientId: ${{ secrets.PORT_CLIENT_ID }}
+          clientSecret: ${{ secrets.PORT_CLIENT_SECRET }}
+          operation: PATCH_RUN
+          runId: ${{ fromJson(inputs.port_context).runId }}
+          logMessage: |
+            Executing the ${{ github.event.inputs.action }} action on the GitHub pull request... ⛴️
+
+      - name: Extract Repository and PR Number
+        id: extract_info
+        run: |
+          link="${{ fromJson(inputs.port_context).entity.properties.link }}"
+          repo_info=$(echo "$link" | sed 's|https://github.com/||' | awk -F'/' '{print $1 "/" $2}')
+          pr_number=$(echo "$link" | awk -F'/' '{print $NF}')
+
+          echo "REPO_INFO=$repo_info" >> $GITHUB_ENV
+          echo "PR_NUMBER=$pr_number" >> $GITHUB_ENV
+
+      - name: Determine Action
+        run: |
+          action="${{ github.event.inputs.action }}"
+          repo_info="${{ env.REPO_INFO }}"
+          pr_number="${{ env.PR_NUMBER }}"
+
+          result=""
+          result_message=""
+
+          if [ -n "$repo_info" ] && [ -n "$pr_number" ]; then
+            if [ "$action" == "close" ]; then
+              result=$(curl -s -o /dev/null -w "%{http_code}" \
+                -X PATCH \
+                -H "Authorization: token ${{ secrets.GH_TOKEN }}" \
+                -H "Accept: application/vnd.github.v3+json" \
+                "https://api.github.com/repos/$repo_info/pulls/$pr_number" \
+                -d '{"state": "closed"}')
+            elif [ "$action" == "merge" ]; then
+              result=$(curl -s -o /dev/null -w "%{http_code}" \
+                -X PUT \
+                -H "Authorization: token ${{ secrets.GH_TOKEN }}" \
+                -H "Accept: application/vnd.github.v3+json" \
+                "https://api.github.com/repos/$repo_info/pulls/$pr_number/merge")
+            elif [ "$action" == "approve" ]; then
+              result=$(curl -s -o /dev/null -w "%{http_code}" \
+                -X PATCH \
+                -H "Authorization: token ${{ secrets.GH_TOKEN }}" \
+                -H "Accept: application/vnd.github.v3+json" \
+                "https://api.github.com/repos/$repo_info/pulls/$pr_number/reviews" \
+                -d '{"event": "APPROVE"}')
+            else
+              result="400" # Invalid action code
+              result_message="Invalid action specified. Expected 'close', 'approve' or 'merge'."
+              echo $result_message
+              exit 1
+            fi
+          else
+            result="400" # Invalid parameters code
+            result_message="Failed to extract repository and PR number from the URL."
+            echo $result_message
+            exit 1
+          fi
+
+          echo "HTTP Status for $action: $result"
+
+          if [ $result -eq 200 ]; then
+            result_message="PR $action completed successfully"
+          else
+            result_message="PR $action failed. HTTP Status: $result"
+          fi
+
+          echo "Result for $action: $result_message"
+
+          echo "GITHUB_ACTION_RESULT=$result" >> $GITHUB_ENV
+          echo "GITHUB_ACTION_TYPE=$action" >> $GITHUB_ENV
+          echo "GITHUB_ACTION_RESULT_MESSAGE=$result_message" >> $GITHUB_ENV
+
+      - name: Notify Port
+        uses: port-labs/port-github-action@v1
+        with:
+          clientId: ${{ secrets.PORT_CLIENT_ID }}
+          clientSecret: ${{ secrets.PORT_CLIENT_SECRET }}
+          operation: PATCH_RUN
+          baseUrl: https://api.getport.io
+          runId: ${{ fromJson(inputs.port_context).runId }}
+          logMessage: |
+            GitHub Action result for ${{ env.GITHUB_ACTION_TYPE }} action on PR ${{ env.PR_NUMBER }}: ${{ env.GITHUB_ACTION_RESULT_MESSAGE }}
