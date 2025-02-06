@@ -1,59 +1,72 @@
 {
-  "identifier": "swaggerPath",
-  "description": "This blueprint represents a Swagger path in our software catalog",
-  "title": "Swagger API Paths",
-  "icon": "Swagger",
-  "schema": {
-    "properties": {
-      "method": {
-        "type": "string",
-        "title": "Method",
-        "default": "get",
-        "enum": ["get", "post", "delete", "put", "patch"],
-        "enumColors": {
-          "get": "yellow",
-          "post": "green",
-          "delete": "red",
-          "put": "purple",
-          "patch": "purple"
+  "swagger": "2.0",
+  "info": {
+    "version": "1.0.0",
+    "title": "Netflix API",
+    "description": "A sample API for Netflix-like service"
+  },
+  "host": "api.netflix.com",
+  "basePath": "/v1",
+  "schemes": ["https"],
+  "paths": {
+    "/movies": {
+      "get": {
+        "summary": "Get a list of movies",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/Movie"
+              }
+            }
+          }
         }
-      },
-      "host": {
-        "type": "string",
-        "title": "API Base URL",
-        "format": "url"
-      },
-      "path": {
-        "title": "Path",
-        "type": "string"
-      },
-      "parameters": {
-        "items": {
-          "type": "object"
-        },
-        "title": "Parameters",
-        "type": "array"
-      },
-      "responses": {
-        "title": "Responses",
-        "type": "object"
-      },
-      "description": {
-        "title": "Description",
-        "type": "string"
-      },
-      "version": {
-        "title": "Version",
-        "type": "string"
-      },
-      "summary": {
-        "title": "Summary",
-        "type": "string"
       }
     },
-    "required": []
+    "/movies/{id}": {
+      "get": {
+        "summary": "Get details of a movie",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/Movie"
+            }
+          },
+          "404": {
+            "description": "Movie not found"
+          }
+        }
+      }
+    }
   },
-  "mirrorProperties": {},
-  "calculationProperties": {},
-  "relations": {}
+  "definitions": {
+    "Movie": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "genre": {
+          "type": "string"
+        },
+        "releaseYear": {
+          "type": "integer"
+        }
+      }
+    }
+  }
 }
